@@ -1,0 +1,20 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "MIT"
+
+[[mods]]
+modId = "apiflux_gametest"
+version = "0"
+displayName = "Apiflux GameTests (dev only)"
+description = '''GameTests for Apiflux. Loaded only by the gameTestServer run.'''
+
+[[dependencies.apiflux_gametest]]
+modId = "apiflux"
+type = "required"
+versionRange = "*"
+ordering = "AFTER"
+side = "BOTH"
+
+# Client check only (hidden window); does nothing on the GameTest server.
+[[mixins]]
+config = "apiflux_gametest.mixins.json"

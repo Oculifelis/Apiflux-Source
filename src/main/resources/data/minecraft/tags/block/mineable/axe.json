@@ -1,0 +1,8 @@
+{
+  "values": [
+    {
+      "id": "apiflux:kinetic_dynamo",
+      "required": false
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "block.apiflux.kinetic_dynamo": "Kinetic Dynamo",
+  "apiflux.goggles.dynamo": "Kinetic Dynamo",
+  "apiflux.goggles.delivering": "Giving %s of %s FE/t",
+  "apiflux.jade.rf_refused": "Outside FE refused (Apiflux)",
+  "config.jade.plugin_apiflux.machine_power": "Apiflux machine power",
+  "apiflux.jei.dynamo": "Turns Create rotation into FE. The shaft goes in the collar side; the other five sides feed any FE block, such as a Complicated Bees centrifuge. Faster shafts give more FE (0.5 FE/t per RPM by default) and draw 2 stress units per RPM."
+}

@@ -1,0 +1,30 @@
+{
+  "variants": {
+    "facing=up": {
+      "model": "apiflux:block/kinetic_dynamo"
+    },
+    "facing=down": {
+      "model": "apiflux:block/kinetic_dynamo",
+      "x": 180
+    },
+    "facing=north": {
+      "model": "apiflux:block/kinetic_dynamo",
+      "x": 90
+    },
+    "facing=south": {
+      "model": "apiflux:block/kinetic_dynamo",
+      "x": 90,
+      "y": 180
+    },
+    "facing=west": {
+      "model": "apiflux:block/kinetic_dynamo",
+      "x": 90,
+      "y": 270
+    },
+    "facing=east": {
+      "model": "apiflux:block/kinetic_dynamo",
+      "x": 90,
+      "y": 90
+    }
+  }
+}
