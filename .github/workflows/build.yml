@@ -1,0 +1,104 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  projects:
+    name: Find Gradle projects
+    runs-on: ubuntu-latest
+    outputs:
+      list: ${{ steps.find.outputs.list }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: find
+        name: List every folder with a Gradle wrapper
+        run: |
+          list=$(find . -name gradlew -not -path './.git/*' -not -path '*/build/*' -printf '%h\n' \
+            | sed 's|^\./||' | sort | jq -R . | jq -cs .)
+          echo "Projects: $list"
+          echo "list=$list" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: ${{ matrix.project }}
+    needs: projects
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ${{ fromJson(needs.projects.outputs.list) }}
+    defaults:
+      run:
+        working-directory: ${{ matrix.project }}
+    env:
+      GRADLE_OPTS: -Dorg.gradle.daemon=false
+      JDKS: -Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64,JAVA_HOME_21_X64,JAVA_HOME_25_X64 -Porg.gradle.java.installations.auto-download=true
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: |
+            17
+            21
+            25
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Pick the JDK Gradle runs on
+        run: |
+          tr -d '\015' < gradlew > gradlew.unix && mv gradlew.unix gradlew && chmod +x gradlew
+          # ForgeGradle (1.20.1) runs on Java 17; the others run on 25 and pick their own toolchain.
+          if grep -qs 'minecraftforge' build.gradle settings.gradle; then
+            echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          fi
+          # Point Gradle at the runner's JDKs (a gradle.properties may name local Windows paths).
+          echo "JDKS=$JDKS -Porg.gradle.java.installations.paths=$JAVA_HOME_17_X64,$JAVA_HOME_21_X64,$JAVA_HOME_25_X64" >> "$GITHUB_ENV"
+      - name: Shared core mod (Fundamentum)
+        run: |
+          want=$(sed -n 's/^fundamentum_version=//p' gradle.properties 2>/dev/null | tr -d '\015')
+          if [ -z "$want" ]; then echo "Not needed."; exit 0; fi
+          mc=${want#*+}
+          loader=neoforge
+          if grep -qs 'minecraftforge' build.gradle; then loader=forge; fi
+          git clone -q --depth 1 https://github.com/Oculifelis/Fundamentum-Source.git "$RUNNER_TEMP/fundamentum"
+          cd "$RUNNER_TEMP/fundamentum/$loader-$mc"
+          tr -d '\015' < gradlew > gradlew.unix && mv gradlew.unix gradlew && chmod +x gradlew
+          ./gradlew publish -x test --no-daemon --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx4g" "-Pfundamentum_publish_repo=$RUNNER_TEMP/fundamentum-repo" $JDKS
+          have="$(sed -n 's/^mod_version=//p' gradle.properties | tr -d '\015')+$mc"
+          cat > "$RUNNER_TEMP/fundamentum.gradle" <<EOF
+          allprojects { repositories { maven { url = uri("$RUNNER_TEMP/fundamentum-repo"); content { includeGroup "com.fundamentum" } } } }
+          EOF
+          echo "Built Fundamentum $have (the project names $want)."
+          echo "DEPS=--init-script $RUNNER_TEMP/fundamentum.gradle -Pfundamentum_version=$have" >> "$GITHUB_ENV"
+      - name: Download compile and server-test dependencies
+        run: |
+          if [ -f tools/fetch_libs.sh ]; then bash tools/fetch_libs.sh; fi
+          if [ -f tools/set_mods.sh ]; then bash tools/set_mods.sh run-gametest full; fi
+      - name: Compile and unit tests
+        run: ./gradlew build --no-daemon --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx4g" --stacktrace $JDKS $DEPS
+      - name: GameTests
+        run: |
+          if grep -qs 'gameTestServer' build.gradle build.gradle.kts; then
+            verify=
+            # Some projects keep server checks in an explicit test-only source tree.
+            target=$(basename "$PWD")
+            if [ -d "../verification/$target" ]; then verify=-Pverification; fi
+            ./gradlew runGameTestServer --no-daemon --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx4g" --stacktrace $JDKS $DEPS $verify
+          else
+            echo "This project has no GameTest server run: compile and unit tests only."
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logs-${{ strategy.job-index }}
+          path: |
+            ${{ matrix.project }}/build/reports/
+            ${{ matrix.project }}/run*/logs/latest.log
+            ${{ matrix.project }}/run*/crash-reports/
+          if-no-files-found: ignore
+          retention-days: 7
